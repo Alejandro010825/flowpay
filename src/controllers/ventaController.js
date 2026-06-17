@@ -1,14 +1,26 @@
 const Venta = require('../models/ventaModel');
 
 exports.registrarVenta = async (req, res) => {
-    const { jornada_id, total, tipo_pago, detalles } = req.body;
+    let { jornada_id, total, tipo_pago, detalles } = req.body;
 
-    if (!jornada_id || !total || !tipo_pago || !detalles || !detalles.length) {
-        return res.status(400).json({ ok: false, msg: 'Datos de la venta incompletos o sin productos.' });
+    let comprobante_url = null;
+    if (req.file) {
+        comprobante_url = req.file.filename;
     }
 
     try {
-        const ventaId = await Venta.createWithDetails({ jornada_id, total, tipo_pago }, detalles);
+        if (typeof detalles === 'string') {
+            detalles = JSON.parse(detalles);
+        }
+
+        if (!jornada_id || !total || !tipo_pago || !detalles || !detalles.length) {
+            return res.status(400).json({ ok: false, msg: 'Datos de la venta incompletos o sin productos.' });
+        }
+
+        const ventaId = await Venta.createWithDetails(
+            { jornada_id, total, tipo_pago, comprobante_url }, 
+            detalles
+        );
 
         return res.status(201).json({
             ok: true,

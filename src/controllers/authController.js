@@ -1,6 +1,9 @@
 const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 exports.registrar = async (req, res) => {
     const { nombre, correo, contrasena } = req.body;
@@ -10,7 +13,7 @@ exports.registrar = async (req, res) => {
     }
 
     try {
-        const userExists = await User.findByEmail(correo);
+        const userExists = await User.findByCorreo(correo);
         if (userExists) {
             return res.status(400).json({ ok: false, msg: 'El correo ya está registrado' });
         }
@@ -36,7 +39,7 @@ exports.login = async (req, res) => {
     }
 
     try {
-        const user = await User.findByEmail(correo);
+        const user = await User.findByCorreo(correo);
         if (!user) {
             return res.status(400).json({ ok: false, msg: 'Credenciales incorrectas (Correo no encontrado)' });
         }
@@ -67,5 +70,58 @@ exports.login = async (req, res) => {
     } catch (error) {
         console.error('Error en el login:', error);
         return res.status(500).json({ ok: false, msg: 'Error en el servidor al iniciar sesión' });
+    }
+};
+
+exports.googleLogin = async (req, res) => {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ ok: false, msg: 'El token de Google es obligatorio.' });
+    }
+
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: idToken,
+            audience: process.env.GOOGLE_CLIENT_ID, 
+        });
+        
+        const payload = ticket.getPayload();
+        const { email, name } = payload; 
+
+        let user = await User.findByCorreo(email);
+        
+        if (!user) {
+            const newUserId = await User.createGoogleUser(name, email);
+            user = { 
+                id: newUserId, 
+                nombre: name, 
+                correo: email, 
+                recordatorio_cierre: 0, 
+                hora_recordatorio: null 
+            };
+        }
+
+        const token = jwt.sign(
+            { id: user.id, nombre: user.nombre },
+            process.env.JWT_SECRET || 'firma_secreta_flowpay',
+            { expiresIn: '30d' }
+        );
+
+        return res.status(200).json({
+            ok: true,
+            token,
+            usuario: {
+                id: user.id,
+                nombre: user.nombre,
+                correo: user.correo,
+                recordatorio_cierre: user.recordatorio_cierre,
+                hora_recordatorio: user.hora_recordatorio
+            }
+        });
+
+    } catch (error) {
+        console.error('Error en Google Auth:', error);
+        return res.status(401).json({ ok: false, msg: 'Token de Google inválido o expirado.' });
     }
 };
