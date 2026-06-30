@@ -14,9 +14,16 @@ const User = {
     },
 
     createGoogleUser: async (nombre, correo) => {
-        const query = 'INSERT INTO usuarios (nombre, correo, contrasena) VALUES (?, ?, ?)';
-        const [result] = await pool.query(query, [nombre, correo, 'GOOGLE_AUTH_ACCOUNT']);
+        // Al haber alterado la tabla a NULL, insertamos explícitamente un campo nulo
+        const query = 'INSERT INTO usuarios (nombre, correo, contrasena) VALUES (?, ?, NULL)';
+        const [result] = await pool.query(query, [nombre, correo]);
         return result.insertId; // Retorna el ID del nuevo usuario creado
+    },
+
+    updateContrasena: async (id, nuevaContrasenaEncriptada) => {
+        const query = 'UPDATE usuarios SET contrasena = ? WHERE id = ?';
+        const [result] = await pool.query(query, [nuevaContrasenaEncriptada, id]);
+        return result;
     }
 };
 

@@ -125,3 +125,64 @@ exports.googleLogin = async (req, res) => {
         return res.status(401).json({ ok: false, msg: 'Token de Google inválido o expirado.' });
     }
 };
+
+
+
+exports.solicitarRecuperacion = async (req, res) => {
+    const { correo } = req.body;
+
+    if (!correo) {
+        return res.status(400).json({ ok: false, msg: 'El correo electrónico es requerido.' });
+    }
+
+    try {
+        const user = await User.findByCorreo(correo);
+        if (!user) {
+            return res.status(400).json({ ok: false, msg: 'No se encontró ningún usuario con este correo.' });
+        }
+
+        const tokenRecuperacion = jwt.sign(
+            { id: user.id, correo: user.correo },
+            process.env.JWT_SECRET || 'firma_secreta_flowpay',
+            { expiresIn: '15m' }
+        );
+
+        console.log(`\n=== TOKEN DE RECUPERACIÓN GENERADO ===\n${tokenRecuperacion}\n======================================\n`);
+
+        return res.status(200).json({
+            ok: true,
+            msg: 'Token de recuperación generado con éxito.',
+            token: tokenRecuperacion
+        });
+
+    } catch (error) {
+        console.error('Error en solicitarRecuperacion:', error);
+        return res.status(500).json({ ok: false, msg: 'Error interno en el servidor al solicitar recuperación.' });
+    }
+};
+
+exports.restablecerContrasena = async (req, res) => {
+    const { token, nuevaContrasena } = req.body;
+
+    if (!token || !nuevaContrasena) {
+        return res.status(400).json({ ok: false, msg: 'El token y la nueva contraseña son obligatorios.' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'firma_secreta_flowpay');
+        
+        const salt = await bcrypt.genSalt(10);
+        const hashedContrasena = await bcrypt.hash(nuevaContrasena, salt);
+
+        await User.updateContrasena(decoded.id, hashedContrasena);
+
+        return res.status(200).json({
+            ok: true,
+            msg: 'Tu contraseña ha sido restablecida con éxito. Ya puedes iniciar sesión.'
+        });
+
+    } catch (error) {
+        console.error('Error en restablecerContrasena:', error);
+        return res.status(401).json({ ok: false, msg: 'El token es inválido o ha expirado.' });
+    }
+};
